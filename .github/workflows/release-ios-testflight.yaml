@@ -10,16 +10,9 @@ name: release-ios-testflight
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version - in the form of v1.2.3"
-        required: false
-        type: string
 
 # ToDo: adapt names
 env:
-  # used for uploading the app to a GitHub release
-  ITCH_GAME: ${{ secrets.ITCH_GAME }}
   XCODE_PROJECT: mobile
   MOBILE_DIRECTORY: mobile
 
@@ -27,6 +20,16 @@ permissions:
   contents: write
 
 jobs:
+  get-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Get game name
+        id: get-name
+        run: echo "name=$(grep '^name = .*"' Cargo.toml | sed -e 's/name = //' -e 's/"//g')" >> $GITHUB_OUTPUT
+    outputs:
+      game-name: ${{ steps.get-name.outputs.name }}
   get-version:
     runs-on: ubuntu-latest
     steps:
@@ -34,11 +37,12 @@ jobs:
         id: get-version
         run: echo "version=$(grep '^version = .*"' Cargo.toml | sed -e 's/version = //' -e 's/"//g')" >> $GITHUB_OUTPUT
     outputs:
-      version: ${{ inputs.version || steps.get-version.outputs.version }}
+      version: ${{ steps.get-version.outputs.version }}
   build-for-iOS:
     runs-on: macos-latest
-    needs: get-version
+    needs: [get-name, get-version]
     env:
+      GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
     timeout-minutes: 40
     steps:
@@ -103,7 +107,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ runner.temp }}/export/${{ env.XCODE_PROJECT }}.ipa
-          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_ios.ipa
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_ios.ipa
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true

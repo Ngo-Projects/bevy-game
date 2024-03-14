@@ -5,10 +5,6 @@ name: release-android-google-play
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "GitHub Release"
-        required: false
-        type: string
       play_release:
         description: "Release name from google play console"
         required: true
@@ -17,7 +13,6 @@ on:
 # ToDo: adapt names
 env:
   # used for uploading the app to a GitHub release
-  ITCH_GAME: ${{ secrets.ITCH_GAME }}
   BUNDLE_PATH: "target/x/release/android/mobile.aab"
   PACKAGE_NAME: "com.ngoprojects.bevygame"
   # release track; you can promote a build to "higher" tracks in the play console or publish to a different track directly
@@ -29,6 +24,16 @@ permissions:
   contents: write
 
 jobs:
+  get-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Get game name
+        id: get-name
+        run: echo "name=$(grep '^name = .*"' Cargo.toml | sed -e 's/name = //' -e 's/"//g')" >> $GITHUB_OUTPUT
+    outputs:
+      game-name: ${{ steps.get-name.outputs.name }}
   get-version:
     runs-on: ubuntu-latest
     steps:
@@ -36,11 +41,12 @@ jobs:
         id: get-version
         run: echo "version=$(grep '^version = .*"' Cargo.toml | sed -e 's/version = //' -e 's/"//g')" >> $GITHUB_OUTPUT
     outputs:
-      version: ${{ inputs.version || steps.get-version.outputs.version }}
+      version: ${{ steps.get-version.outputs.version }}
   bundle-sign-release:
     runs-on: ubuntu-latest
-    needs: get-version
+    needs: [get-name, get-version]
     env:
+      GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
     timeout-minutes: 40
     steps:
@@ -69,7 +75,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.BUNDLE_PATH }}
-          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_android.aab
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_android.aab
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true
