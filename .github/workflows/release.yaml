@@ -25,7 +25,9 @@ jobs:
     steps:
       - name: Get version
         id: get-version
-        run: echo "version=$(grep '^version = .*"' Cargo.toml | sed -e 's/version = //' -e 's/"//g')" >> $GITHUB_OUTPUT
+        run: |
+          pwd
+          echo "version=$(grep '^version = .*"' Cargo.toml | sed -e 's/version = //' -e 's/"//g')" >> $GITHUB_OUTPUT
     outputs:
       version: ${{ inputs.version || steps.get-version.outputs.version }}
 
