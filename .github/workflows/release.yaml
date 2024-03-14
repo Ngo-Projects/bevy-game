@@ -302,7 +302,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: mobile/${{ env.GAME_NAME }}_${{ env.VERSION }}_iOS.ipa
+          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_iOS.ipa
           asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_iOS.ipa
           release_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
