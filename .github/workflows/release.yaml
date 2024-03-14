@@ -13,7 +13,7 @@ on:
 
 env:
   BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-  ITCH_GAME: ${{ secrets.ITCH_GAME }}
+  GAME_NAME: ${{ secrets.ITCH_GAME }}
   ITCH_USER: ${{ secrets.ITCH_USER }}
 
 permissions:
@@ -30,14 +30,30 @@ jobs:
         run: echo "version=$(grep '^version = .*"' Cargo.toml | sed -e 's/version = //' -e 's/"//g')" >> $GITHUB_OUTPUT
     outputs:
       version: ${{ inputs.version || steps.get-version.outputs.version }}
-
+  get-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get changelog
+        id: get-changelog
+        run: |
+          versions=$(grep "^## \[.*]" ChangeLog.md)
+          first_two=$(echo "$versions" | head -2)
+          start=$(echo "$first_two" | head -1 | sed -e 's/[]\/$*.^[]/\\&/g')
+          end=$(echo "$first_two" | tail -1 | sed -e 's/[]\/$*.^[]/\\&/g')
+          body=$(sed -n -r "/$start/,/$end/p" ChangeLog.md | head -n -1)
+          echo 'changelog<<EOF' >> $GITHUB_OUTPUT
+          echo "$body" >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+    outputs:
+      changelog: ${{ steps.get-changelog.outputs.changelog }}
   build-macOS:
     runs-on: macos-latest
-    needs: get-version
+    needs: [get-version, get-changelog]
     env:
       # macOS 11.0 Big Sur is the first version to support universal binaries
       MACOSX_DEPLOYMENT_TARGET: 11.0
       VERSION: ${{ needs.get-version.outputs.version }}
+      CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -62,43 +78,38 @@ jobs:
           SDKROOT=$(xcrun -sdk macosx --show-sdk-path) cargo build --profile dist --target=x86_64-apple-darwin
       - name: Create Universal Binary
         run: |
-          lipo -create -output target/dist/${{ env.ITCH_GAME }} target/aarch64-apple-darwin/dist/${{ env.ITCH_GAME }} target/x86_64-apple-darwin/dist/${{ env.ITCH_GAME }}
+          lipo -create -output target/dist/${{ env.GAME_NAME }} target/aarch64-apple-darwin/dist/${{ env.GAME_NAME }} target/x86_64-apple-darwin/dist/${{ env.GAME_NAME }}
       - name: Create release
         run: |
           mkdir -p build/macos/src/Game.app/Contents/MacOS/assets
           cp -r assets/ build/macos/src/Game.app/Contents/MacOS/assets
           cp -r credits/ build/macos/src/Game.app/Contents/MacOS/credits
-          cp target/dist/${{ env.ITCH_GAME }} build/macos/src/Game.app/Contents/MacOS/
-          mv build/macos/src/Game.app build/macos/src/${{ env.ITCH_GAME }}.app
+          cp target/dist/${{ env.GAME_NAME }} build/macos/src/Game.app/Contents/MacOS/
+          mv build/macos/src/Game.app build/macos/src/${{ env.GAME_NAME }}.app
           ln -s /Applications build/macos/src/
-          hdiutil create -fs HFS+ -volname "${{ env.ITCH_GAME }}" -srcfolder build/macos/src ${{ env.ITCH_GAME }}.dmg
-      - name: Get changelog
-        id: get-changelog
-        run: |
-          versions=$(grep "^## \[.*]" ChangeLog.md)
-          first_two=$(echo "$versions" | head -2)
-          start=$(echo "$first_two" | head -1 | sed -e 's/[]\/$*.^[]/\\&/g')
-          end=$(echo "$first_two" | tail -1 | sed -e 's/[]\/$*.^[]/\\&/g')
-          body=$(sed -n -r "/$start/,/$end/p" ChangeLog.md | head -n -1)
-          echo 'changelog<<EOF' >> $GITHUB_OUTPUT
-          echo "$body" >> $GITHUB_OUTPUT
-          echo 'EOF' >> $GITHUB_OUTPUT
+          hdiutil create -fs HFS+ -volname "${{ env.GAME_NAME }}" -srcfolder build/macos/src ${{ env.GAME_NAME }}_${{ env.VERSION }}.dmg
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.GAME_NAME }}_macos
+          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}.dmg
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.ITCH_GAME }}.dmg
-          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_macOS.dmg
+          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}.dmg
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS.dmg
           release_name: ${{ env.VERSION }}
-          body: ${{ steps.get-changelog.outputs.changelog }}
+          body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
           overwrite: true
 
   build-linux:
     runs-on: ubuntu-latest
-    needs: get-version
+    needs: [get-version, get-changelog]
     env:
       VERSION: ${{ needs.get-version.outputs.version }}
+      CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -113,31 +124,33 @@ jobs:
           cargo build --profile dist
       - name: Prepare release
         run: |
-          chmod +x target/dist/${{ env.ITCH_GAME }}
-          mv target/dist/${{ env.ITCH_GAME }} .
+          chmod +x target/dist/${{ env.GAME_NAME }}
+          mv target/dist/${{ env.GAME_NAME }} .
       - name: Bundle release
         run: |
-          tar -czf ${{ env.ITCH_GAME }}_linux.tar.gz ${{ env.ITCH_GAME }} assets credits
+          tar -czf ${{ env.GAME_NAME }}_${{ env.VERSION }}_linux.tar.gz ${{ env.GAME_NAME }} assets credits
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.GAME_NAME }}_linux
+          path: ${{ env.GAME_NAME }}_linux.tar.gz
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.ITCH_GAME }}_linux.tar.gz
-          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_linux.tar.gz
+          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_linux.tar.gz
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_linux.tar.gz
           release_name: ${{ env.VERSION }}
+          body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
           overwrite: true
-      - name: Deploy to Itch.io
-        uses: josephbmanley/butler-publish-itchio-action@master
-        env:
-          CHANNEL: linux
-          PACKAGE: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_linux.tar.gz
 
   build-windows:
     runs-on: windows-latest
-    needs: get-version
+    needs: [get-version, get-changelog]
     env:
       VERSION: ${{ needs.get-version.outputs.version }}
+      CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
       BUILD_INSTALLER: ${{ true }}
     steps:
       - name: Checkout repository
@@ -161,17 +174,25 @@ jobs:
       - name: Zip release
         uses: vimtor/action-zip@v1.1
         with:
-          files: target/dist/assets/ target/dist/credits/ target/dist/${{ env.ITCH_GAME }}.exe
-          dest: ${{ env.ITCH_GAME }}_windows.zip
+          files: target/dist/assets/ target/dist/credits/ target/dist/${{ env.GAME_NAME }}.exe
+          dest: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
       - name: Create Installer
         if: ${{ env.BUILD_INSTALLER }}
-        run: dotnet build -p:Version=${{ env.VERSION }} -c Release build/windows/installer/Installer.wixproj --output installer
+        run: dotnet build -p:Version=${{ env.VERSION }} -c Release build/windows/installer/Installer.wixproj --output ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows
+          path: |
+            installer/en-US/${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
+            ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
+
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.ITCH_GAME }}_windows.zip
-          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_windows.zip
+          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
           tag: ${{ env.VERSION }}
           overwrite: true
       - name: Upload installer
@@ -179,22 +200,19 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: installer/en-US/installer.msi
-          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_windows.msi
+          file: installer/en-US/${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
           release_name: ${{ env.VERSION }}
+          body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
           overwrite: true
-      - name: Deploy to Itch.io
-        uses: josephbmanley/butler-publish-itchio-action@master
-        env:
-          CHANNEL: windows
-          PACKAGE: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_windows.msi
 
   build-web:
     runs-on: ubuntu-latest
-    needs: get-version
+    needs: [get-version, get-changelog]
     env:
       VERSION: ${{ needs.get-version.outputs.version }}
+      CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -218,32 +236,34 @@ jobs:
         uses: NiklasEi/wasm-opt-action@v2
         with:
           file: dist/*.wasm
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4.2.5
+        with:
+          branch: gh-pages
+          folder: dist
       - name: Zip release
         uses: vimtor/action-zip@v1.1
         with:
           files: dist/
-          dest: ${{ env.ITCH_GAME }}_web.zip
+          dest: ${{ env.GAME_NAME }}_${{ env.VERSION }}_web.zip
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.ITCH_GAME }}_web.zip
-          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_web.zip
+          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_web.zip
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_web.zip
           release_name: ${{ env.VERSION }}
+          body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
           overwrite: true
-      - name: Deploy to Itch.io
-        uses: josephbmanley/butler-publish-itchio-action@master
-        env:
-          CHANNEL: html5
-          PACKAGE: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_web.zip
 
   build-for-iOS:
     runs-on: macos-latest
     timeout-minutes: 30
-    needs: get-version
+    needs: [get-version, get-changelog]
     env:
       VERSION: ${{ needs.get-version.outputs.version }}
+      CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -255,24 +275,26 @@ jobs:
           make xcodebuild-iphone-release
           mkdir Payload
           mv build/Build/Products/Release-iphoneos/*.app Payload
-          zip -r ${{ env.ITCH_GAME }}.zip Payload
-          mv ${{ env.ITCH_GAME }}.zip ${{ env.ITCH_GAME }}.ipa
+          zip -r ${{ env.GAME_NAME }}.zip Payload
+          mv ${{ env.GAME_NAME }}.zip ${{ env.GAME_NAME }}${{ env.VERSION }}_.ipa
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: mobile/${{ env.ITCH_GAME }}.ipa
-          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_unsigned_ios.ipa
+          file: mobile/${{ env.GAME_NAME }}${{ env.VERSION }}_.ipa
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_unsigned_ios.ipa
           release_name: ${{ env.VERSION }}
+          body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
           overwrite: true
 
   build-for-Android:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: get-version
+    needs: [get-version, get-changelog]
     env:
       VERSION: ${{ needs.get-version.outputs.version }}
+      CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -284,13 +306,54 @@ jobs:
       - name: Build app for Android
         # This uses a debug build, since release builds require keystore configuration
         # For AAB builds that can be pushed to the Play store, see the release-android-google-play workflow.
-        run: ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME cargo apk build --package mobile
+        run: |
+          ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME cargo apk build --package mobile
+          mv target/debug/apk/${{ env.GAME_NAME }}.apk ${{ env.GAME_NAME }}_${{ env.VERSION }}_android.apk
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.GAME_NAME }}_android
+          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_android.apk
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: target/debug/apk/${{ env.ITCH_GAME }}.apk
-          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_android.apk
+          file: target/debug/apk/${{ env.GAME_NAME }}.apk
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_android.apk
           release_name: ${{ env.VERSION }}
+          body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
           overwrite: true
+  deploy-itch:
+    runs-on: ubuntu-latest
+    needs:
+      [
+        get-version,
+        build-linux,
+        build-macOS,
+        build-windows,
+        build-for-Android,
+        build-for-iOS,
+      ]
+    env:
+      VERSION: ${{ needs.get-version.outputs.version }}
+    strategy:
+      matrix:
+        platform:
+          [
+            { suffix: _linux.tar.gz, channel: linux },
+            { suffix: _macOS.dmg, channel: osx },
+            { suffix: _windows.msi, channel: windows },
+            { suffix: _android.apk, channel: android },
+            { suffix: _ios.ipa, channel: ios },
+          ]
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}${{ matrix.platform.suffix }}
+      - name: Deploy to Itch.io
+        uses: josephbmanley/butler-publish-itchio-action@master
+        env:
+          CHANNEL: ${{ matrix.platform.channel }}
+          PACKAGE: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
