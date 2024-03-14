@@ -17,9 +17,9 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(0.4, 0.4, 0.4)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Bevy game".to_string(), // ToDo
+                title: "Bevy Game".to_string(), // ToDo
                 // Bind to canvas included in `index.html`
-                canvas: Some("#bevy".to_owned()),
+                canvas: Some("#game-canvas".to_owned()),
                 // Tells wasm not to override default event handling, like F5 and Ctrl+R
                 prevent_default_event_handling: false,
                 ..default()

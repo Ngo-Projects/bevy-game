@@ -6,6 +6,11 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+*"
   workflow_dispatch:
     inputs:
+      game-name:
+        description: "The name of the game binary"
+        required: false
+        type: string
+        default: bevy-game
       version:
         description: "Version - in the form of v1.2.3"
         required: false
@@ -13,13 +18,23 @@ on:
 
 env:
   BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-  GAME_NAME: ${{ secrets.ITCH_GAME }}
+  ITCH_GAME: ${{ secrets.ITCH_GAME }}
   ITCH_USER: ${{ secrets.ITCH_USER }}
 
 permissions:
   contents: write
 
 jobs:
+  get-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Get game name
+        id: get-name
+        run: echo "name=$(grep '^name = .*"' Cargo.toml | sed -e 's/name = //' -e 's/"//g')" >> $GITHUB_OUTPUT
+    outputs:
+      game-name: ${{ inputs.game-name || steps.get-name.outputs.name }}
   get-version:
     runs-on: ubuntu-latest
     steps:
@@ -33,6 +48,8 @@ jobs:
   get-changelog:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - name: Get changelog
         id: get-changelog
         run: |
@@ -48,10 +65,11 @@ jobs:
       changelog: ${{ steps.get-changelog.outputs.changelog }}
   build-macOS:
     runs-on: macos-latest
-    needs: [get-version, get-changelog]
+    needs: [get-name, get-version, get-changelog]
     env:
       # macOS 11.0 Big Sur is the first version to support universal binaries
       MACOSX_DEPLOYMENT_TARGET: 11.0
+      GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
       CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
     steps:
@@ -87,18 +105,18 @@ jobs:
           cp target/dist/${{ env.GAME_NAME }} build/macos/src/Game.app/Contents/MacOS/
           mv build/macos/src/Game.app build/macos/src/${{ env.GAME_NAME }}.app
           ln -s /Applications build/macos/src/
-          hdiutil create -fs HFS+ -volname "${{ env.GAME_NAME }}" -srcfolder build/macos/src ${{ env.GAME_NAME }}_${{ env.VERSION }}.dmg
+          hdiutil create -fs HFS+ -volname "${{ env.GAME_NAME }}" -srcfolder build/macos/src ${{ env.GAME_NAME }}-${{ env.VERSION }}.dmg
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.GAME_NAME }}_macos
-          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}.dmg
+          name: ${{ env.GAME_NAME }}-macos
+          path: ${{ env.GAME_NAME }}-${{ env.VERSION }}.dmg
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}.dmg
-          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS.dmg
+          file: ${{ env.GAME_NAME }}-${{ env.VERSION }}.dmg
+          asset_name: ${{ env.GAME_NAME }}-${{ env.VERSION }}-macOS.dmg
           release_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
@@ -106,8 +124,9 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
-    needs: [get-version, get-changelog]
+    needs: [get-name, get-version, get-changelog]
     env:
+      GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
       CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
     steps:
@@ -128,18 +147,18 @@ jobs:
           mv target/dist/${{ env.GAME_NAME }} .
       - name: Bundle release
         run: |
-          tar -czf ${{ env.GAME_NAME }}_${{ env.VERSION }}_linux.tar.gz ${{ env.GAME_NAME }} assets credits
+          tar -czf ${{ env.GAME_NAME }}-${{ env.VERSION }}-linux.tar.gz ${{ env.GAME_NAME }} assets credits
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.GAME_NAME }}_linux
-          path: ${{ env.GAME_NAME }}_linux.tar.gz
+          name: ${{ env.GAME_NAME }}-linux
+          path: ${{ env.GAME_NAME }}-linux.tar.gz
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_linux.tar.gz
-          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_linux.tar.gz
+          file: ${{ env.GAME_NAME }}-${{ env.VERSION }}-linux.tar.gz
+          asset_name: ${{ env.GAME_NAME }}-${{ env.VERSION }}-linux.tar.gz
           release_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
@@ -147,8 +166,9 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    needs: [get-version, get-changelog]
+    needs: [get-name, get-version, get-changelog]
     env:
+      GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
       CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
       BUILD_INSTALLER: ${{ true }}
@@ -175,24 +195,24 @@ jobs:
         uses: vimtor/action-zip@v1.1
         with:
           files: target/dist/assets/ target/dist/credits/ target/dist/${{ env.GAME_NAME }}.exe
-          dest: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
+          dest: ${{ env.GAME_NAME }}-${{ env.VERSION }}-windows.zip
       - name: Create Installer
         if: ${{ env.BUILD_INSTALLER }}
-        run: dotnet build -p:Version=${{ env.VERSION }} -c Release build/windows/installer/Installer.wixproj --output ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows
+        run: dotnet build -p:Version=${{ env.VERSION }} -c Release build/windows/installer/Installer.wixproj --output ${{ env.GAME_NAME }}-${{ env.VERSION }}-windows
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows
+          name: ${{ env.GAME_NAME }}-${{ env.VERSION }}-windows
           path: |
-            installer/en-US/${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
-            ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
+            installer/en-US/${{ env.GAME_NAME }}-${{ env.VERSION }}-windows.msi
+            ${{ env.GAME_NAME }}-${{ env.VERSION }}-windows.zip
 
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
-          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
+          file: ${{ env.GAME_NAME }}-${{ env.VERSION }}-windows.zip
+          asset_name: ${{ env.GAME_NAME }}-${{ env.VERSION }}-windows.zip
           tag: ${{ env.VERSION }}
           overwrite: true
       - name: Upload installer
@@ -200,8 +220,8 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: installer/en-US/${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
-          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
+          file: installer/en-US/${{ env.GAME_NAME }}-${{ env.VERSION }}-windows.msi
+          asset_name: ${{ env.GAME_NAME }}-${{ env.VERSION }}-windows.msi
           release_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
@@ -209,8 +229,9 @@ jobs:
 
   build-web:
     runs-on: ubuntu-latest
-    needs: [get-version, get-changelog]
+    needs: [get-name, get-version, get-changelog]
     env:
+      GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
       CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
     steps:
@@ -245,13 +266,13 @@ jobs:
         uses: vimtor/action-zip@v1.1
         with:
           files: dist/
-          dest: ${{ env.GAME_NAME }}_${{ env.VERSION }}_web.zip
+          dest: ${{ env.GAME_NAME }}-${{ env.VERSION }}-web.zip
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_web.zip
-          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_web.zip
+          file: ${{ env.GAME_NAME }}-${{ env.VERSION }}-web.zip
+          asset_name: ${{ env.GAME_NAME }}-${{ env.VERSION }}-web.zip
           release_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
@@ -260,8 +281,9 @@ jobs:
   build-for-iOS:
     runs-on: macos-latest
     timeout-minutes: 30
-    needs: [get-version, get-changelog]
+    needs: [get-name, get-version, get-changelog]
     env:
+      GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
       CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
     steps:
@@ -276,13 +298,13 @@ jobs:
           mkdir Payload
           mv build/Build/Products/Release-iphoneos/*.app Payload
           zip -r ${{ env.GAME_NAME }}.zip Payload
-          mv ${{ env.GAME_NAME }}.zip ${{ env.GAME_NAME }}${{ env.VERSION }}_.ipa
+          mv ${{ env.GAME_NAME }}.zip ${{ env.GAME_NAME }}${{ env.VERSION }}-ios.ipa
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: mobile/${{ env.GAME_NAME }}${{ env.VERSION }}_.ipa
-          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_unsigned_ios.ipa
+          file: mobile/${{ env.GAME_NAME }}-${{ env.VERSION }}-ios.ipa
+          asset_name: ${{ env.GAME_NAME }}-${{ env.VERSION }}-unsigned_ios.ipa
           release_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
@@ -291,8 +313,9 @@ jobs:
   build-for-Android:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [get-version, get-changelog]
+    needs: [get-name, get-version, get-changelog]
     env:
+      GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
       CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
     steps:
@@ -308,18 +331,19 @@ jobs:
         # For AAB builds that can be pushed to the Play store, see the release-android-google-play workflow.
         run: |
           ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME cargo apk build --package mobile
-          mv target/debug/apk/${{ env.GAME_NAME }}.apk ${{ env.GAME_NAME }}_${{ env.VERSION }}_android.apk
+          ls -la target/debug/apk
+          mv target/debug/apk/${{ env.GAME_NAME }}.apk ${{ env.GAME_NAME }}-${{ env.VERSION }}-android.apk
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.GAME_NAME }}_android
-          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_android.apk
+          name: ${{ env.GAME_NAME }}-android
+          path: ${{ env.GAME_NAME }}-${{ env.VERSION }}-android.apk
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: target/debug/apk/${{ env.GAME_NAME }}.apk
-          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_android.apk
+          file: ${{ env.GAME_NAME }}-${{ env.VERSION }}-android.apk
+          asset_name: ${{ env.GAME_NAME }}-${{ env.VERSION }}-android.apk
           release_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
@@ -328,6 +352,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       [
+        get-name,
         get-version,
         build-linux,
         build-macOS,
@@ -336,6 +361,7 @@ jobs:
         build-for-iOS,
       ]
     env:
+      GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
     strategy:
       matrix:
@@ -351,9 +377,9 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}${{ matrix.platform.suffix }}
+          name: ${{ env.GAME_NAME }}-${{ env.VERSION }}${{ matrix.platform.suffix }}
       - name: Deploy to Itch.io
         uses: josephbmanley/butler-publish-itchio-action@master
         env:
           CHANNEL: ${{ matrix.platform.channel }}
-          PACKAGE: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
+          PACKAGE: ${{ env.GAME_NAME }}-${{ env.VERSION }}-windows.msi
