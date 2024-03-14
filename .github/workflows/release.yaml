@@ -365,6 +365,7 @@ jobs:
       GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
     strategy:
+      fail-fast: false
       matrix:
         platform:
           [
@@ -372,7 +373,6 @@ jobs:
             { name: macOS, channel: osx },
             { name: windows, channel: windows },
             { name: android, channel: android },
-            { name: iOS, channel: ios },
           ]
     steps:
       - name: Download artifacts
@@ -380,8 +380,13 @@ jobs:
         with:
           name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}
           path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}
+      - name: Zip artifact
+        uses: vimtor/action-zip@v1.1
+        with:
+          files: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}/*
+          dest: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}.zip
       - name: Deploy to Itch.io
         uses: josephbmanley/butler-publish-itchio-action@master
         env:
           CHANNEL: ${{ matrix.platform.channel }}
-          PACKAGE: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}
+          PACKAGE: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}.zip
