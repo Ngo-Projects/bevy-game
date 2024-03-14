@@ -103,7 +103,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ runner.temp }}/export/${{ env.XCODE_PROJECT }}.ipa
-          asset_name: ${{ env.ITCH_GAME }}-${{ env.VERSION }}-ios.ipa
+          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_ios.ipa
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true

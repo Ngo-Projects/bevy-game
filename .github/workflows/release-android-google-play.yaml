@@ -69,7 +69,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.BUNDLE_PATH }}
-          asset_name: ${{ env.ITCH_GAME }}-${{ env.VERSION }}-android.aab
+          asset_name: ${{ env.ITCH_GAME }}_${{ env.VERSION }}_android.aab
           release_name: ${{ env.VERSION }}
           tag: ${{ env.VERSION }}
           overwrite: true
