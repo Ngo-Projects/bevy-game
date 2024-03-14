@@ -23,11 +23,11 @@ jobs:
   get-version:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - name: Get version
         id: get-version
-        run: |
-          pwd
-          echo "version=$(grep '^version = .*"' Cargo.toml | sed -e 's/version = //' -e 's/"//g')" >> $GITHUB_OUTPUT
+        run: echo "version=$(grep '^version = .*"' Cargo.toml | sed -e 's/version = //' -e 's/"//g')" >> $GITHUB_OUTPUT
     outputs:
       version: ${{ inputs.version || steps.get-version.outputs.version }}
 
