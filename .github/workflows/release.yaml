@@ -94,17 +94,17 @@ jobs:
           cp target/dist/${{ env.GAME_NAME }} build/macos/src/Game.app/Contents/MacOS/
           mv build/macos/src/Game.app build/macos/src/${{ env.GAME_NAME }}.app
           ln -s /Applications build/macos/src/
-          hdiutil create -fs HFS+ -volname "${{ env.GAME_NAME }}" -srcfolder build/macos/src ${{ env.GAME_NAME }}_${{ env.VERSION }}.dmg
+          hdiutil create -fs HFS+ -volname "${{ env.GAME_NAME }}" -srcfolder build/macos/src ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS.dmg
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.GAME_NAME }}_macos
-          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}.dmg
+          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS
+          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS.dmg
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}.dmg
+          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS.dmg
           asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS.dmg
           release_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
@@ -140,8 +140,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.GAME_NAME }}_linux
-          path: ${{ env.GAME_NAME }}_linux.tar.gz
+          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_linux
+          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_linux.tar.gz
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
@@ -256,6 +256,11 @@ jobs:
         with:
           files: dist/
           dest: ${{ env.GAME_NAME }}_${{ env.VERSION }}_web.zip
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_web
+          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_web.zip
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
@@ -287,13 +292,18 @@ jobs:
           mkdir Payload
           mv build/Build/Products/Release-iphoneos/*.app Payload
           zip -r ${{ env.GAME_NAME }}.zip Payload
-          mv ${{ env.GAME_NAME }}.zip ${{ env.GAME_NAME }}${{ env.VERSION }}_ios.ipa
+          mv ${{ env.GAME_NAME }}.zip ${{ env.GAME_NAME }}_${{ env.VERSION }}_iOS.ipa
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_iOS
+          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_iOS.ipa
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: mobile/${{ env.GAME_NAME }}_${{ env.VERSION }}_ios.ipa
-          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_unsigned_ios.ipa
+          file: mobile/${{ env.GAME_NAME }}_${{ env.VERSION }}_iOS.ipa
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_iOS.ipa
           release_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
@@ -325,7 +335,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.GAME_NAME }}_android
+          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_android
           path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_android.apk
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
@@ -356,19 +366,20 @@ jobs:
       matrix:
         platform:
           [
-            { suffix: _linux.tar.gz, channel: linux },
-            { suffix: _macOS.dmg, channel: osx },
-            { suffix: _windows.msi, channel: windows },
-            { suffix: _android.apk, channel: android },
-            { suffix: _ios.ipa, channel: ios },
+            { name: linux, channel: linux },
+            { name: macOS, channel: osx },
+            { name: windows, channel: windows },
+            { name: android, channel: android },
+            { name: iOS, channel: ios },
           ]
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}${{ matrix.platform.suffix }}
+          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}
+          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}
       - name: Deploy to Itch.io
         uses: josephbmanley/butler-publish-itchio-action@master
         env:
           CHANNEL: ${{ matrix.platform.channel }}
-          PACKAGE: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
+          PACKAGE: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}
