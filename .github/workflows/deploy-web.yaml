@@ -1,5 +1,4 @@
-name: deploy-github-page
-
+name: Deploy web
 on:
   workflow_dispatch:
 
@@ -9,10 +8,9 @@ permissions:
 jobs:
   build-web:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
@@ -22,7 +20,7 @@ jobs:
       - name: Install trunk
         uses: jetli/trunk-action@v0.4.0
         with:
-          version: 'latest'
+          version: "latest"
       - name: Add wasm target
         run: |
           rustup target add wasm32-unknown-unknown

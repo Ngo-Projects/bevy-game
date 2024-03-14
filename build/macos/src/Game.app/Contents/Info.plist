@@ -11,7 +11,7 @@
         <key>CFBundleIconFile</key>
         <string>AppIcon.icns</string>
         <key>CFBundleIdentifier</key>
-        <string>your.domain.bevy-game</string> <!-- ToDo -->
+        <string>com.ngoprojects.bevygame</string> <!-- ToDo -->
         <key>CFBundleInfoDictionaryVersion</key>
         <string>6.0</string>
         <key>CFBundleName</key>

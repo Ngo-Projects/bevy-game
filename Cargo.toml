@@ -1,10 +1,15 @@
 [package]
-name = "bevy_game" # ToDo
-version = "0.1.0"
+name = "bevy_game"                                       # ToDo
+description = "A game developed using the Bevy engine."
+version = "0.0.0"
 publish = false
-authors = ["Niklas Eicker <git@nikl.me>"] # ToDo: you are the author ;)
+authors = ["Jason Ngo <jngo102@aim.com>"]
+repository = "https://github.com/Ngo-Projects/bevy_game"
 edition = "2021"
 exclude = ["dist", "build", "assets", "credits"]
+license = "MIT"
+readme = "ReadMe.md"
+rust-version = "1.76.0"
 
 [workspace]
 members = ["mobile"]
@@ -32,38 +37,45 @@ codegen-units = 1
 strip = true
 
 [features]
-dev = [
-    "bevy/dynamic_linking",
-]
+dev = ["bevy/dynamic_linking"]
 
 # All of Bevy's default features exept for the audio related ones (bevy_audio, vorbis), since they clash with bevy_kira_audio
 #   and android_shared_stdcxx, since that is covered in `mobile`
 [dependencies]
 bevy = { version = "0.13", default-features = false, features = [
     "animation",
+    "asset_processor",
+    "bevy_animation",
     "bevy_asset",
-    "bevy_gilrs",
-    "bevy_scene",
-    "bevy_winit",
+    "bevy_audio",
     "bevy_core_pipeline",
-    "bevy_pbr",
-    "bevy_gltf",
+    # "bevy_dynamic_plugin",
+    "bevy_gilrs",
     "bevy_render",
+    "bevy_scene",
     "bevy_sprite",
     "bevy_text",
     "bevy_ui",
+    "bevy_winit",
     "multi-threaded",
     "png",
-    "hdr",
-    "x11",
-    "bevy_gizmos",
-    "tonemapping_luts",
-    "default_font",
+    "serialize",
+    "shader_format_glsl",
+    "shader_format_spirv",
+    "wav",
+    "wayland",
     "webgl2",
-    "bevy_debug_stepping",
+    "x11",
 ] }
 bevy_kira_audio = { version = "0.19" }
 bevy_asset_loader = { version = "0.20" }
+bevy_rapier2d = { version = "0.25", features = [
+    "enhanced-determinism",
+    # "parallel",
+    "serde-serialize",
+    "wasm-bindgen",
+] }
+leafwing-input-manager = "0.13"
 rand = { version = "0.8.3" }
 webbrowser = { version = "0.8", features = ["hardened"] }
 
