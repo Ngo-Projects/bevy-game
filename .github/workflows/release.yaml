@@ -187,7 +187,9 @@ jobs:
           dest: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
       - name: Create Installer
         if: ${{ env.BUILD_INSTALLER }}
-        run: dotnet build -p:Version=${{ env.VERSION }} -c Release build/windows/installer/Installer.wixproj --output ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows
+        run: |
+          dotnet build -p:Version=${{ env.VERSION }} -c Release build/windows/installer/Installer.wixproj --output installer
+          mv installer/en-US/installer.msi ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
