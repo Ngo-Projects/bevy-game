@@ -48,7 +48,7 @@ jobs:
           echo 'EOF' >> $GITHUB_OUTPUT
     outputs:
       changelog: ${{ steps.get-changelog.outputs.changelog }}
-  build-macOS:
+  build-macos:
     runs-on: macos-latest
     needs: [get-name, get-version, get-changelog]
     env:
@@ -61,27 +61,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Remove build script
-        run: |
-          rm build.rs
+        run: rm build.rs
       - name: Install rust toolchain for Apple Silicon
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           targets: aarch64-apple-darwin
       - name: Build release for Apple Silicon
-        run: |
-          SDKROOT=$(xcrun -sdk macosx --show-sdk-path) cargo build --profile dist --target=aarch64-apple-darwin
+        run: SDKROOT=$(xcrun -sdk macosx --show-sdk-path) cargo build --profile dist --target=aarch64-apple-darwin
       - name: Install rust toolchain for Apple x86
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           targets: x86_64-apple-darwin
       - name: Build release for x86 Apple
-        run: |
-          SDKROOT=$(xcrun -sdk macosx --show-sdk-path) cargo build --profile dist --target=x86_64-apple-darwin
+        run: SDKROOT=$(xcrun -sdk macosx --show-sdk-path) cargo build --profile dist --target=x86_64-apple-darwin
       - name: Create Universal Binary
-        run: |
-          lipo -create -output target/dist/${{ env.GAME_NAME }} target/aarch64-apple-darwin/dist/${{ env.GAME_NAME }} target/x86_64-apple-darwin/dist/${{ env.GAME_NAME }}
+        run: lipo -create -output target/dist/${{ env.GAME_NAME }} target/aarch64-apple-darwin/dist/${{ env.GAME_NAME }} target/x86_64-apple-darwin/dist/${{ env.GAME_NAME }}
       - name: Create release
         run: |
           mkdir -p build/macos/src/Game.app/Contents/MacOS/assets
@@ -90,18 +86,18 @@ jobs:
           cp target/dist/${{ env.GAME_NAME }} build/macos/src/Game.app/Contents/MacOS/
           mv build/macos/src/Game.app build/macos/src/${{ env.GAME_NAME }}.app
           ln -s /Applications build/macos/src/
-          hdiutil create -fs HFS+ -volname "${{ env.GAME_NAME }}" -srcfolder build/macos/src ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS.dmg
+          hdiutil create -fs HFS+ -volname "${{ env.GAME_NAME }}" -srcfolder build/macos/src ${{ env.GAME_NAME }}_${{ env.VERSION }}_macos.dmg
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS
-          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS.dmg
+          name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macos
+          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macos.dmg
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS.dmg
-          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macOS.dmg
+          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macos.dmg
+          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_macos.dmg
           release_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
           tag: ${{ env.VERSION }}
@@ -124,15 +120,13 @@ jobs:
       - name: Install Dependencies
         run: sudo apt-get update; sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev libwayland-dev
       - name: Build release
-        run: |
-          cargo build --profile dist
+        run: cargo build --profile dist
       - name: Prepare release
         run: |
           chmod +x target/dist/${{ env.GAME_NAME }}
           mv target/dist/${{ env.GAME_NAME }} .
       - name: Bundle release
-        run: |
-          tar -czf ${{ env.GAME_NAME }}_${{ env.VERSION }}_linux.tar.gz ${{ env.GAME_NAME }} assets credits
+        run: tar -czf ${{ env.GAME_NAME }}_${{ env.VERSION }}_linux.tar.gz ${{ env.GAME_NAME }} assets credits
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -156,7 +150,6 @@ jobs:
       GAME_NAME: ${{ needs.get-name.outputs.game-name }}
       VERSION: ${{ needs.get-version.outputs.version }}
       CHANGELOG: ${{ needs.get-changelog.outputs.changelog }}
-      BUILD_INSTALLER: ${{ true }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -165,24 +158,12 @@ jobs:
         with:
           toolchain: stable
       - name: Install dotnet
-        if: ${{ env.BUILD_INSTALLER }}
         uses: actions/setup-dotnet@v3
         with:
           global-json-file: build/windows/installer/global.json
       - name: Build release
-        run: |
-          cargo build --profile dist
-      - name: Prepare release
-        run: |
-          mkdir target/dist/assets && cp -r assets target/dist/assets
-          mkdir target/dist/credits && cp -r credits target/dist/credits
-      - name: Zip release
-        uses: vimtor/action-zip@v1.1
-        with:
-          files: target/dist/assets/ target/dist/credits/ target/dist/${{ env.GAME_NAME }}.exe
-          dest: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
-      - name: Create Installer
-        if: ${{ env.BUILD_INSTALLER }}
+        run: cargo build --profile dist
+      - name: Create installer
         run: |
           dotnet build -p:Version=${{ env.VERSION }} -c Release build/windows/installer/Installer.wixproj --output installer
           mv installer/en-US/installer.msi ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
@@ -190,20 +171,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows
-          path: |
-            ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
-            ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
-
-      - name: Upload release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
-          asset_name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.zip
-          tag: ${{ env.VERSION }}
-          overwrite: true
+          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_windows.msi
       - name: Upload installer
-        if: ${{ env.BUILD_INSTALLER }}
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -270,9 +239,8 @@ jobs:
           tag: ${{ env.VERSION }}
           overwrite: true
 
-  build-for-iOS:
+  build-ios:
     runs-on: macos-latest
-    timeout-minutes: 30
     needs: [get-name, get-version, get-changelog]
     env:
       GAME_NAME: ${{ needs.get-name.outputs.game-name }}
@@ -307,9 +275,8 @@ jobs:
           tag: ${{ env.VERSION }}
           overwrite: true
 
-  build-for-Android:
+  build-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     needs: [get-name, get-version, get-changelog]
     env:
       GAME_NAME: ${{ needs.get-name.outputs.game-name }}
@@ -352,10 +319,10 @@ jobs:
         get-name,
         get-version,
         build-linux,
-        build-macOS,
+        build-macos,
         build-windows,
-        build-for-Android,
-        build-for-iOS,
+        build-android,
+        build-ios,
       ]
     env:
       GAME_NAME: ${{ needs.get-name.outputs.game-name }}
@@ -365,27 +332,22 @@ jobs:
       matrix:
         platform:
           [
-            { name: linux, channel: linux },
-            { name: macOS, channel: osx },
-            { name: windows, channel: windows },
-            { name: android, channel: android },
+            { extension: tar.gz, name: linux, channel: linux },
+            { extension: dmg, name: macos, channel: osx },
+            { extension: msi, name: windows, channel: windows },
+            { extension: apk, name: android, channel: android },
+            { extension: zip, name: web, channel: html5 },
           ]
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}
-          path: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}
-      - name: Zip artifact
-        uses: vimtor/action-zip@v1.1
-        with:
-          files: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}/*
-          dest: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}.zip
       - name: Deploy to Itch.io
         uses: josephbmanley/butler-publish-itchio-action@master
         env:
           CHANNEL: ${{ matrix.platform.channel }}
-          PACKAGE: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}.zip
+          PACKAGE: ${{ env.GAME_NAME }}_${{ env.VERSION }}_${{ matrix.platform.name }}.${{ matrix.platform.extension}}
           BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
           ITCH_GAME: ${{ env.GAME_NAME }}
           ITCH_USER: ${{ secrets.ITCH_USER }}
